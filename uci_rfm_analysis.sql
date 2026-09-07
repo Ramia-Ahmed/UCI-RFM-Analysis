@@ -121,3 +121,63 @@ SELECT COUNT(*) FROM rfm_segments;
 SELECT * FROM rfm_segments;
 
 COPY rfm_segments TO 'UCI/rfm_segments.csv' (HEADER, DELIMITER ',');
+
+                -- Cohort Analysis --
+-- Clean Base Data (Filtered out negetive quantities)
+CREATE OR REPLACE VIEW clean_invoices AS
+SELECT
+    CustomerID,
+    InvoiceNo,
+    InvoiceDate,
+    DATE_TRUNC('month', STRPTIME(InvoiceDate, '%-m/%-d/%Y %-H:%M')) AS order_month
+FROM uci_flat_table
+WHERE CustomerID IS NOT NULL
+AND Quantity > 0
+AND UnitPrice > 0;
+
+-- First Purchase Month per Customer = Their Cohort
+CREATE OR REPLACE VIEW customer_cohorts AS
+SELECT
+    CustomerID,
+    MIN(order_month) AS cohort_month
+FROM clean_invoices
+GROUP BY CustomerID;
+
+-- Every Customer Month They were Active, tagged with cohort + month offset
+CREATE OR REPLACE VIEW cohort_activity AS
+SELECT
+    c.CustomerID,
+    c.cohort_month,
+    DATE_DIFF('month', c.cohort_month, i.order_month) AS month_number
+FROM customer_cohorts c
+JOIN clean_invoices i USING(CustomerID)
+GROUP BY
+    c.CustomerID,
+    c.cohort_month,
+    month_number;
+
+-- Cohort Sizes (Month 0 count per cohort)
+CREATE OR REPLACE VIEW cohort_sizes AS
+SELECT
+    cohort_month,
+    COUNT(DISTINCT CustomerID) AS cohort_size
+FROM customer_cohorts
+GROUP BY cohort_month;
+
+-- Retention Metrix - active customers per cohort per month_number
+
+SELECT
+    a.cohort_month,
+    a.month_number,
+    COUNT(DISTINCT a.CustomerID) AS active_customers,
+    s.cohort_size,
+    ROUND(active_customers::DECIMAL / s.cohort_size * 100, 2) AS retention_pct
+FROM cohort_activity a
+JOIN cohort_sizes s USING(cohort_month)
+GROUP BY
+    a.cohort_month,
+    a.month_number,
+    s.cohort_size
+ORDER BY
+    a.cohort_month,
+    a.month_number;
