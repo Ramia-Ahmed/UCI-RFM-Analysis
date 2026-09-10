@@ -1,0 +1,11 @@
+{
+    "duckdb.databases": [
+        {
+            "alias": "uci_rfm_database",
+            "type": "file",
+            "path": "d:\\VS Code\\UCI RFM Analysis\\uci_rfm_database.duckdb",
+            "attached": false
+        }
+    ],
+    "duckdb.defaultDatabase": "uci_rfm_database"
+}
